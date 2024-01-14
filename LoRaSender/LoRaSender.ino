@@ -93,6 +93,13 @@ void onReceive(int packetSize) {
   } else if (nodeIdentifier == "SL2") {
     packetsReceivedFromNode2++;
   }
+
+  unsigned long receiveTime = millis();
+  unsigned long sendTime = Incoming.substring(2, Incoming.indexOf(',')).toInt();
+  unsigned long timeOfArrival = receiveTime - sendTime;
+
+  Serial.print("Time of Arrival: ");
+  Serial.println(timeOfArrival);
   //----------------------------------------
 }
 
@@ -152,7 +159,7 @@ void loop() {
 
     if (packetsSentToNode1 >= 40 || packetsSentToNode2 >= 40) {
       displayPDR();
-    })
+    }
   }
 
   onReceive(LoRa.parsePacket());

@@ -18,8 +18,9 @@ float binLevel = 0;
 
 unsigned long previousMillis = 0;
 const long interval = 2000;
-m 
+
 void sendMessage(String Outgoing, byte Destination) {
+
   LoRa.beginPacket();             //--> start packet
   LoRa.write(Destination);        //--> add destination address
   LoRa.write(LocalAddress);       //--> add sender address
@@ -64,7 +65,10 @@ void onReceive(int packetSize) {
 void Processing_incoming_data() {
 
   if (Incoming == "SDS1") {
-    Message = "SL1," + String(binLevel);
+
+    unsigned long sendTime = millis();
+
+    Message = "SL1," + String(binLevel) + "," + String(sendTime);
 
     Serial.println();
     Serial.print("Send message to Master : ");
