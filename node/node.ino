@@ -1,6 +1,5 @@
 #include <SPI.h>
 #include <LoRa.h>
-#include "DHT.h"
 #include "enums.h"
 
 #define pingPin (16)
@@ -18,6 +17,12 @@ float binLevel = 0;
 
 unsigned long previousMillis = 0;
 const long interval = 2000;
+
+int packetCounter = 0;
+int sentCounter = 0;
+int ackCounter = 0;
+char currentGroup = 'A';
+int currentConfigIndex = 0;
 
 void sendMessage(String Outgoing, byte Destination) {
 
@@ -102,6 +107,12 @@ void applyConfig(char group, int index) {
   }
 }
 
+char getNextGroup(char currentGroup) {
+  if (currentGroup == 'A') return 'B';
+  else if (currentGroup == 'B') return 'C';
+  else return 'A';
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -109,7 +120,7 @@ void setup() {
 
   Serial.println();
   Serial.println("Start LoRa init...");
-  applyConfig('A', 0);
+  applyConfig(currentGroup, currentConfigIndex);
 }
 
 void loop() {
@@ -119,9 +130,28 @@ void loop() {
     previousMillis = currentMillis;
 
     binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
-  }
 
-  onReceive(LoRa.parsePacket());
+    unsigned long sendTime = millis();
+    String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
+
+    Message = additionalInfo + ", Packet " + String(packetCounter) + ", Config " + currentGroup + String(currentConfigIndex);
+    sendMessage(Message, Destination_Master);
+
+    packetCounter++;
+    sentCounter++;
+
+    if (packetCounter >= 40) {
+      packetCounter = 0;
+      currentConfigIndex++;
+
+      if (currentConfigIndex >= configs[currentGroup].size()) {
+        currentConfigIndex = 0;
+        currentGroup = getNextGroup(currentGroup);
+      }
+
+      applyConfig(currentGroup, currentConfigIndex);
+    }
+  }
 }
 
 double readUltrasonic() {

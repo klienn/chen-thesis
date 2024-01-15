@@ -1,6 +1,6 @@
 #include <SPI.h>
 #include <LoRa.h>
-#include "DHT.h"
+#include "enums.h"
 
 #define pingPin (16)
 #define ss 5
@@ -10,21 +10,28 @@
 String Incoming = "";
 String Message = "";
 
-byte LocalAddress = 0x03;
-byte Destination_Master = 0x01;
+byte LocalAddress = 0x03;        //--> address of this device (Slave 1).
+byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 
 float binLevel = 0;
 
 unsigned long previousMillis = 0;
 const long interval = 2000;
 
+int packetCounter = 0;
+int sentCounter = 0;
+int ackCounter = 0;
+char currentGroup = 'A';
+int currentConfigIndex = 0;
+
 void sendMessage(String Outgoing, byte Destination) {
-  LoRa.beginPacket();
-  LoRa.write(Destination);
-  LoRa.write(LocalAddress);
-  LoRa.write(Outgoing.length());
-  LoRa.print(Outgoing);
-  LoRa.endPacket();
+
+  LoRa.beginPacket();             //--> start packet
+  LoRa.write(Destination);        //--> add destination address
+  LoRa.write(LocalAddress);       //--> add sender address
+  LoRa.write(Outgoing.length());  //--> add payload length
+  LoRa.print(Outgoing);           //--> add payload
+  LoRa.endPacket();               //--> finish packet and send it
 }
 
 void onReceive(int packetSize) {
@@ -57,13 +64,16 @@ void onReceive(int packetSize) {
   //Serial.println("RSSI: " + String(LoRa.packetRssi()));
   //Serial.println("Snr: " + String(LoRa.packetSnr()));
   //----------------------------------------
-
   Processing_incoming_data();
 }
 
 void Processing_incoming_data() {
-  if (Incoming == "SDS2") {
-    Message = "SL2," + String(binLevel);
+
+  if (Incoming == "SDS1") {
+
+    unsigned long sendTime = millis();
+
+    Message = "SL1," + String(binLevel) + "," + String(sendTime);
 
     Serial.println();
     Serial.print("Send message to Master : ");
@@ -73,20 +83,44 @@ void Processing_incoming_data() {
   }
 }
 
+void applyConfig(char group, int index) {
+  if (configs.find(group) != configs.end() && index < configs[group].size()) {
+    LoRa.end();
+
+    // Retrieve the configuration
+    LoRaConfig config = configs[group][index];
+
+    // Apply the configuration
+    LoRa.setSignalBandwidth(config.bandwidth);
+    LoRa.setCodingRate4(config.codingRateDenominator);
+    LoRa.setSpreadingFactor(config.spreadingFactor);
+
+    if (!LoRa.begin(433E6)) {
+      Serial.println("LoRa init failed. Check your connections.");
+      while (true)
+        ;  // if failed, do nothing
+    }
+    Serial.println("LoRa reinitialized with new settings.");
+  } else {
+    // Handle the error: the group or index is out of bounds
+    Serial.println("Error: Configuration not found.");
+  }
+}
+
+char getNextGroup(char currentGroup) {
+  if (currentGroup == 'A') return 'B';
+  else if (currentGroup == 'B') return 'C';
+  else return 'A';
+}
+
 void setup() {
   Serial.begin(115200);
 
   LoRa.setPins(ss, rst, dio0);
-LoRa.
 
   Serial.println();
   Serial.println("Start LoRa init...");
-  if (!LoRa.begin(433E6)) {
-    Serial.println("LoRa init failed. Check your connections.");
-    while (true)
-      ;  // if failed, do nothing
-  }
-  Serial.println("LoRa init succeeded.");
+  applyConfig(currentGroup, currentConfigIndex);
 }
 
 void loop() {
@@ -96,8 +130,28 @@ void loop() {
     previousMillis = currentMillis;
 
     binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
+
+    unsigned long sendTime = millis();
+    String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
+
+    Message = additionalInfo + ", Packet " + String(packetCounter) + ", Config " + currentGroup + String(currentConfigIndex);
+    sendMessage(Message, Destination_Master);
+
+    packetCounter++;
+    sentCounter++;
+
+    if (packetCounter >= 40) {
+      packetCounter = 0;
+      currentConfigIndex++;
+
+      if (currentConfigIndex >= configs[currentGroup].size()) {
+        currentConfigIndex = 0;
+        currentGroup = getNextGroup(currentGroup);
+      }
+
+      applyConfig(currentGroup, currentConfigIndex);
+    }
   }
-  onReceive(LoRa.parsePacket());
 }
 
 double readUltrasonic() {
