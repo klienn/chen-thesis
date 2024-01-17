@@ -134,7 +134,7 @@ void loop() {
     unsigned long sendTime = millis();
     String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
 
-    Message = additionalInfo + ", Packet " + String(packetCounter) + ", Config " + currentGroup + String(currentConfigIndex);
+    Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
     sendMessage(Message, Destination_Master);
 
     packetCounter++;
