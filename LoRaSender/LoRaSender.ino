@@ -2,6 +2,9 @@
 #include <LoRa.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <queue>
+
+std::queue<String> httpQueue;
 
 #define ss 5
 #define rst 21
@@ -9,7 +12,7 @@
 
 const char* ssid = "scam ni";
 const char* password = "Walakokabalo0123!";
-const char* webAppUrl = "https://script.google.com/macros/s/AKfycbyLmlb3Mkk_djTz9EU37_fVWZcLtsT_ezUjBzSr6ANlURkHW74fMRiVhptGofn0gcwQuA/exec";  // The URL you got from the script deployment
+const char* webAppUrl = "https://script.google.com/macros/s/AKfycbyHnenfG2XHthIcA08X5MD8TXiF1ikFGyslCP_g510UhO2tWFdExeLSA_jp6FFWiDMSGQ/exec";  // The URL you got from the script deployment
 WiFiClient client;
 
 String Incoming = "";
@@ -39,6 +42,90 @@ unsigned long packetsSentToNode1 = 0;
 unsigned long packetsReceivedFromNode1 = 0;
 unsigned long packetsSentToNode2 = 0;
 unsigned long packetsReceivedFromNode2 = 0;
+
+bool isDigitMinusOrDot(char c) {
+  return isdigit(c) || c == '-' || c == '.';
+}
+
+bool isValidData(const String& data) {
+  // Node
+  int nodeIndex = data.indexOf("\"node\":\"") + 8;
+  if (data.substring(nodeIndex, nodeIndex + 2) != "SL" || !isdigit(data[nodeIndex + 2])) {
+    Serial.println("Validation failed at Node");
+    return false;
+  }
+
+  // binLevel (floating-point number)
+  int binLevelIndex = data.indexOf("\"binLevel\":") + 11;
+  int nextCommaIndex = data.indexOf(',', binLevelIndex);
+  String binLevelValue = data.substring(binLevelIndex, nextCommaIndex);
+  for (char c : binLevelValue) {
+    if (!isDigitMinusOrDot(c)) {
+      Serial.println("Validation failed at binLevel");
+      return false;
+    }
+  }
+
+  // toa (assuming it's numeric)
+  int toaIndex = data.indexOf("\"toa\":") + 6;
+  nextCommaIndex = data.indexOf(',', toaIndex);
+  String toaValue = data.substring(toaIndex, nextCommaIndex);
+  for (char c : toaValue) {
+    if (!isdigit(c)) {
+      Serial.println("Validation failed at toa");
+      return false;
+    }
+  }
+
+  // packet (assuming it's numeric)
+  int packetIndex = data.indexOf("\"packet\":") + 9;
+  nextCommaIndex = data.indexOf(',', packetIndex);
+  String packetValue = data.substring(packetIndex, nextCommaIndex);
+  for (char c : packetValue) {
+    if (!isdigit(c)) {
+      Serial.println("Validation failed at packet");
+      return false;
+    }
+  }
+
+  // config (alphanumeric check)
+  int configIndex = data.indexOf("\"config\":\"") + 10;
+  int configEndIndex = data.indexOf('"', configIndex);
+  String configValue = data.substring(configIndex, configEndIndex);
+  for (char c : configValue) {
+    if (!isalnum(c)) {
+      Serial.println("Validation failed at config");
+      return false;
+    }
+  }
+
+  // rssi (numeric, including negative)
+  int rssiIndex = data.indexOf("\"rssi\":") + 7;
+  int rssiEndIndex = data.indexOf(',', rssiIndex);
+  String rssiValue = data.substring(rssiIndex, rssiEndIndex);
+  for (char c : rssiValue) {
+    if (!isDigitMinusOrDot(c)) {
+      Serial.println("Validation failed at rssi");
+      return false;
+    }
+  }
+
+  // snr (numeric, including negative)
+  int snrIndex = data.indexOf("\"snr\":") + 6;
+  int snrEndIndex = data.indexOf('}', snrIndex);       // Adjusted to find the end of the object
+  if (snrEndIndex == -1) snrEndIndex = data.length();  // In case '}' is not found
+  String snrValue = data.substring(snrIndex, snrEndIndex);
+  for (char c : snrValue) {
+    if (!isDigitMinusOrDot(c)) {
+      Serial.println("Validation failed at snr");
+      return false;
+    }
+  }
+
+  Serial.println("Data is valid");
+  return true;  // All checks passed, data is valid
+}
+
 
 void incrementSentPackets(String node) {
   if (node == "SL1") {
@@ -74,6 +161,7 @@ void sendMessage(String Outgoing, byte Destination) {
 }
 
 void onReceive(int packetSize) {
+
   if (packetSize == 0) return;
 
   int recipient = LoRa.read();
@@ -134,6 +222,10 @@ void processIncomingMessage(byte sender, String message) {
   int firstCommaIndex = message.indexOf(',');
   String nodeIdentifier = message.substring(0, firstCommaIndex);
 
+  // if (nodeIdentifier != "SL1" || nodeIdentifier != "SL2") {
+  //   return;
+  // }
+
   // Extract binLevel
   int secondCommaIndex = message.indexOf(',', firstCommaIndex + 1);
   float binLevel = message.substring(firstCommaIndex + 1, secondCommaIndex).toFloat();
@@ -174,29 +266,48 @@ void processIncomingMessage(byte sender, String message) {
   Serial.println("Time of Arrival: " + String(timeOfArrival));
   Serial.println("Packet Number: " + String(packetNumber));
   Serial.println("Config: " + config);
-
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(webAppUrl);
-    http.addHeader("Content-Type", "application/json");
-
-    // Prepare JSON data
-    String jsonData = "{\"node\":" + String(nodeIdentifier) + ",\"binLevel\":" + String(binLevel) + ",\"toa\":" + String(timeOfArrival) + ",\"packet\":" + String(packetNumber) + ",\"config\":" + config + ",\"rssi\":" + String(LoRa.packetRssi()) + ",\"snr\":" + String(LoRa.packetSnr()) + "}";
-
-    // POST data
-    int httpResponseCode = http.POST(jsonData);
-
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      Serial.println(httpResponseCode);
-      Serial.println(response);
-    } else {
-      Serial.println("Error on sending POST");
-    }
-
-    http.end();
+  Serial.println("HERE");
+  String jsonData = "{\"node\":\"" + String(nodeIdentifier) + "\",\"binLevel\":" + String(binLevel) + ",\"toa\":" + String(timeOfArrival) + ",\"packet\":" + String(packetNumber) + ",\"config\":\"" + config + "\",\"rssi\":" + String(LoRa.packetRssi()) + ",\"snr\":" + String(LoRa.packetSnr()) + "}";
+  if (isValidData(jsonData)) {
+    Serial.println("Adding to queue: " + jsonData);
+    httpQueue.push(jsonData);
+    Serial.println("Queued data for HTTP POST: " + jsonData);
+  } else {
+    Serial.println("Invalid data detected, not queuing: " + jsonData);
   }
 }
+
+void httpPostTask(void* parameter) {
+  Serial.println("HTTP Post Task Running");
+  for (;;) {
+    if (!httpQueue.empty()) {
+      String jsonData = httpQueue.front();
+      httpQueue.pop();
+
+      Serial.println("Sending data: " + jsonData);  // Debug print
+
+      if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin(webAppUrl);
+        http.addHeader("Content-Type", "application/json");
+        int httpResponseCode = http.POST(jsonData);
+
+        if (httpResponseCode > 0) {
+          String response = http.getString();
+          Serial.println(httpResponseCode);
+          Serial.println(response);
+        } else {
+          Serial.println("Error on sending POST: " + String(httpResponseCode));
+        }
+        http.end();
+      } else {
+        Serial.println("WiFi not connected");
+      }
+    }
+    vTaskDelay(300 / portTICK_PERIOD_MS);  // Delay to prevent task from using 100% CPU
+  }
+}
+
 
 void displayPDR() {
   float pdrNode1 = (float)packetsReceivedFromNode1 / packetsSentToNode1 * 100;
@@ -243,6 +354,14 @@ void setup() {
       ;  // if failed, do nothing
   }
   Serial.println("LoRa init succeeded.");
+  xTaskCreate(
+    httpPostTask,   /* Task function */
+    "HTTPPostTask", /* Name of task */
+    10000,          /* Stack size of task */
+    NULL,           /* Parameter of the task */
+    1,              /* Priority of the task */
+    NULL);          /* Task handle to keep track of created task */
+  Serial.println("HTTP Post Task Created");
   //----------------------------------------
 }
 
@@ -276,4 +395,5 @@ void loop() {
   //   }
   // }
   onReceive(LoRa.parsePacket());
+  // delay(200);
 }

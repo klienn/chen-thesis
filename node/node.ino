@@ -16,7 +16,7 @@ byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 float binLevel = 0;
 
 unsigned long previousMillis = 0;
-const long interval = 2000;
+const long interval = 5000;
 
 int packetCounter = 0;
 int sentCounter = 0;
@@ -135,6 +135,7 @@ void loop() {
     String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
+    Serial.println(Message);
     sendMessage(Message, Destination_Master);
 
     packetCounter++;

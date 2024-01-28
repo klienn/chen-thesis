@@ -16,7 +16,7 @@ byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 float binLevel = 0;
 
 unsigned long previousMillis = 0;
-const long interval = 2000;
+const long interval = 5000;
 
 int packetCounter = 0;
 int sentCounter = 0;
@@ -69,11 +69,11 @@ void onReceive(int packetSize) {
 
 void Processing_incoming_data() {
 
-  if (Incoming == "SDS1") {
+  if (Incoming == "SDS2") {
 
     unsigned long sendTime = millis();
 
-    Message = "SL1," + String(binLevel) + "," + String(sendTime);
+    Message = "SL2," + String(binLevel) + "," + String(sendTime);
 
     Serial.println();
     Serial.print("Send message to Master : ");
@@ -132,9 +132,10 @@ void loop() {
     binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
 
     unsigned long sendTime = millis();
-    String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
+    String additionalInfo = "SL2," + String(binLevel) + "," + String(sendTime);
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
+    Serial.println(Message);
     sendMessage(Message, Destination_Master);
 
     packetCounter++;
