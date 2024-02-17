@@ -23,6 +23,8 @@ String Message = "";
 byte LocalAddress = 0x01;
 byte Destination_ESP32_Node_1 = 0x02;
 byte Destination_ESP32_Node_2 = 0x03;
+byte Destination_ESP32_Node_3 = 0x04;
+byte Destination_ESP32_Node_4 = 0x05;
 
 unsigned long previousMillis = 0;
 const long interval = 1000;
