@@ -11,7 +11,7 @@
 String Incoming = "";
 String Message = "";
 
-byte LocalAddress = 0x03;        //--> address of this device (Slave 1).
+byte LocalAddress = 0x03;        
 byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 
 RTC_DS3231 rtc;
@@ -35,55 +35,6 @@ void sendMessage(String Outgoing, byte Destination) {
   LoRa.write(Outgoing.length());  //--> add payload length
   LoRa.print(Outgoing);           //--> add payload
   LoRa.endPacket();               //--> finish packet and send it
-}
-
-void onReceive(int packetSize) {
-  if (packetSize == 0) return;
-
-  int recipient = LoRa.read();
-  byte sender = LoRa.read();
-  byte incomingLength = LoRa.read();
-
-  Incoming = "";
-
-  while (LoRa.available()) {
-    Incoming += (char)LoRa.read();
-  }
-
-  if (incomingLength != Incoming.length()) {
-    Serial.println("error: message length does not match length");
-    return;
-  }
-
-  if (recipient != LocalAddress) {
-    Serial.println("This message is not for me.");
-    return;
-  }
-
-  Serial.println();
-  Serial.println("Received from: 0x" + String(sender, HEX));
-  Serial.println("Message length: " + String(incomingLength));
-  Serial.println("Message: " + Incoming);
-  //Serial.println("RSSI: " + String(LoRa.packetRssi()));
-  //Serial.println("Snr: " + String(LoRa.packetSnr()));
-  //----------------------------------------
-  Processing_incoming_data();
-}
-
-void Processing_incoming_data() {
-
-  if (Incoming == "SDS2") {
-
-    unsigned long sendTime = millis();
-
-    Message = "SL2," + String(binLevel) + "," + String(sendTime);
-
-    Serial.println();
-    Serial.print("Send message to Master : ");
-    Serial.println(Message);
-
-    sendMessage(Message, Destination_Master);
-  }
 }
 
 void applyConfig(char group, int index) {
