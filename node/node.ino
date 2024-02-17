@@ -154,7 +154,7 @@ void loop() {
     packetCounter++;
     sentCounter++;
 
-    if (packetCounter >= 40) {
+    if (packetCounter >= 30) {
       packetCounter = 0;
       currentConfigIndex++;
 

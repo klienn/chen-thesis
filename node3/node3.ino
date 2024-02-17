@@ -11,7 +11,7 @@
 String Incoming = "";
 String Message = "";
 
-byte LocalAddress = 0x03;        //--> address of this device (Slave 1).
+byte LocalAddress = 0x04;        //--> address of this device (Slave 1).
 byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 
 RTC_DS3231 rtc;
@@ -145,7 +145,7 @@ void loop() {
 
     binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
 
-    String additionalInfo = "SL2," + String(binLevel) + "," + String(sendTime);
+    String additionalInfo = "SL3," + String(binLevel) + "," + String(sendTime);
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
     Serial.println(Message);
