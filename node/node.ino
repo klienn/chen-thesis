@@ -1,10 +1,11 @@
 #include <SPI.h>
 #include <LoRa.h>
+#include "RTClib.h"
 #include "enums.h"
 
 #define pingPin (16)
 #define ss 5
-#define rst 21
+#define rst 4
 #define dio0 2
 
 String Incoming = "";
@@ -12,6 +13,8 @@ String Message = "";
 
 byte LocalAddress = 0x02;        //--> address of this device (Slave 1).
 byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
+
+RTC_DS3231 rtc;
 
 float binLevel = 0;
 
@@ -116,6 +119,13 @@ char getNextGroup(char currentGroup) {
 void setup() {
   Serial.begin(115200);
 
+  if (!rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    while (1) delay(10);
+  }
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+
   LoRa.setPins(ss, rst, dio0);
 
   Serial.println();
@@ -126,12 +136,15 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
+  DateTime now = rtc.now();
+
+  uint32_t sendTime = now.hour() * 3600 + now.minute() * 60 + now.second();
+
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
 
     binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
 
-    unsigned long sendTime = millis();
     String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);

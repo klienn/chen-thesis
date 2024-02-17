@@ -2,12 +2,14 @@
 #include <LoRa.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "RTClib.h"
+#include <ArduinoJson.h>
 #include <queue>
 
 std::queue<String> httpQueue;
 
 #define ss 5
-#define rst 21
+#define rst 4
 #define dio0 2
 
 const char* ssid = "scam ni";
@@ -22,26 +24,12 @@ byte LocalAddress = 0x01;
 byte Destination_ESP32_Node_1 = 0x02;
 byte Destination_ESP32_Node_2 = 0x03;
 
-struct NodeInfo {
-  unsigned long lastPacketNumber = 0;
-  String lastConfig = "";
-  unsigned long packetsReceived = 0;
-  unsigned long totalToA = 0;
-  float totalRssi = 0;
-  float totalSnr = 0;
-};
-
-NodeInfo node1Info, node2Info;
-
 unsigned long previousMillis = 0;
 const long interval = 1000;
 
-byte node = 0;
+RTC_DS3231 rtc;
 
-unsigned long packetsSentToNode1 = 0;
-unsigned long packetsReceivedFromNode1 = 0;
-unsigned long packetsSentToNode2 = 0;
-unsigned long packetsReceivedFromNode2 = 0;
+byte node = 0;
 
 bool isDigitMinusOrDot(char c) {
   return isdigit(c) || c == '-' || c == '.';
@@ -126,40 +114,6 @@ bool isValidData(const String& data) {
   return true;  // All checks passed, data is valid
 }
 
-
-void incrementSentPackets(String node) {
-  if (node == "SL1") {
-    packetsSentToNode1++;
-  } else if (node == "SL2") {
-    packetsSentToNode2++;
-  }
-}
-
-// Function to increment received packet counters
-void incrementReceivedPackets(String node) {
-  if (node == "SL1") {
-    packetsReceivedFromNode1++;
-  } else if (node == "SL2") {
-    packetsReceivedFromNode2++;
-  }
-}
-
-
-void sendMessage(String Outgoing, byte Destination) {
-  LoRa.beginPacket();
-  LoRa.write(Destination);
-  LoRa.write(LocalAddress);
-  LoRa.write(Outgoing.length());
-  LoRa.print(Outgoing);
-  LoRa.endPacket();
-
-  if (Destination == Destination_ESP32_Node_1) {
-    incrementSentPackets("SL1");
-  } else if (Destination == Destination_ESP32_Node_2) {
-    incrementSentPackets("SL2");
-  }
-}
-
 void onReceive(int packetSize) {
 
   if (packetSize == 0) return;
@@ -212,12 +166,10 @@ void onReceive(int packetSize) {
 }
 
 void processIncomingMessage(byte sender, String message) {
-  // Parse the message
-  // Example format: SL1,binLevel,sendTime,Packet #,Config
-  // Add parsing logic here...
 
-  // Determine which node sent the message
-  NodeInfo* nodeInfo = (sender == 0x02) ? &node1Info : &node2Info;
+  DateTime now = rtc.now();
+
+  uint32_t unixtime = now.hour() * 3600 + now.minute() * 60 + now.second();
 
   int firstCommaIndex = message.indexOf(',');
   String nodeIdentifier = message.substring(0, firstCommaIndex);
@@ -242,23 +194,7 @@ void processIncomingMessage(byte sender, String message) {
   String config = message.substring(fourthCommaIndex + 1);
 
   // Calculate ToA
-  unsigned long receiveTime = millis();
-  unsigned long timeOfArrival = receiveTime - sendTime;
-  nodeInfo->totalToA += timeOfArrival;
-
-  // Update RSSI and SNR totals
-  nodeInfo->totalRssi += LoRa.packetRssi();
-  nodeInfo->totalSnr += LoRa.packetSnr();
-
-  // Check for config change and packet count
-  if (config != nodeInfo->lastConfig || packetNumber < nodeInfo->lastPacketNumber) {
-    // New config or packet sequence restarted
-    nodeInfo->packetsReceived = 1;
-    nodeInfo->lastConfig = config;
-  } else {
-    nodeInfo->packetsReceived++;
-  }
-  nodeInfo->lastPacketNumber = packetNumber;
+  unsigned long timeOfArrival = unixtime - sendTime;
 
   // Print information (for debugging, can be removed later)
   Serial.println("Received message from node: " + String(sender == 0x02 ? "1" : "2"));
@@ -308,22 +244,15 @@ void httpPostTask(void* parameter) {
   }
 }
 
-
-void displayPDR() {
-  float pdrNode1 = (float)packetsReceivedFromNode1 / packetsSentToNode1 * 100;
-  float pdrNode2 = (float)packetsReceivedFromNode2 / packetsSentToNode2 * 100;
-
-  Serial.print("PDR for Node 1: ");
-  Serial.print(pdrNode1);
-  Serial.println("%");
-
-  Serial.print("PDR for Node 2: ");
-  Serial.print(pdrNode2);
-  Serial.println("%");
-}
-
 void setup() {
   Serial.begin(115200);
+
+  if (!rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    while (1) delay(10);
+  }
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
   WiFi.setAutoReconnect(true);
 
@@ -366,34 +295,5 @@ void setup() {
 }
 
 void loop() {
-  // unsigned long currentMillis = millis();
-
-  // if (currentMillis - previousMillis >= interval) {
-  //   previousMillis = currentMillis;
-
-  //   node++;
-  //   if (node > 2) node = 1;
-
-  //   Message = "SDS" + String(node);
-
-  //   if (node == 1) {
-  //     Serial.println();
-  //     Serial.print("Send message to ESP32 Node " + String(node));
-  //     Serial.println(" : " + Message);
-  //     sendMessage(Message, Destination_ESP32_Node_1);
-  //   }
-
-  //   if (node == 2) {
-  //     Serial.println();
-  //     Serial.print("Send message to ESP32 Node " + String(node));
-  //     Serial.println(" : " + Message);
-  //     sendMessage(Message, Destination_ESP32_Node_2);
-  //   }
-
-  //   if (packetsSentToNode1 >= 40 || packetsSentToNode2 >= 40) {
-  //     displayPDR();
-  //   }
-  // }
   onReceive(LoRa.parsePacket());
-  // delay(200);
 }
