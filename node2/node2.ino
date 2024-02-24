@@ -4,6 +4,7 @@
 #include "enums.h"
 
 #define pingPin (16)
+#define trigPin (17)
 #define ss 5
 #define rst 4
 #define dio0 2
@@ -11,7 +12,7 @@
 String Incoming = "";
 String Message = "";
 
-byte LocalAddress = 0x03; // node1 - 0x02 node2 - 0x03 node3 - 0x4 node4 - 0x05
+byte LocalAddress = 0x03;        // node1 - 0x02 node2 - 0x03 node3 - 0x4 node4 - 0x05
 byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 
 RTC_DS3231 rtc;
@@ -27,6 +28,7 @@ int sentCounter = 0;
 int ackCounter = 0;
 char currentGroup = 'A';
 int currentConfigIndex = 0;
+uint32_t sendTime = 0;
 
 void sendMessage(String Outgoing, byte Destination) {
 
@@ -71,6 +73,9 @@ char getNextGroup(char currentGroup) {
 void setup() {
   Serial.begin(115200);
 
+  pinMode(pingPin, INPUT);
+  pinMode(trigPin, OUTPUT);
+
   if (!rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
@@ -90,15 +95,15 @@ void loop() {
 
   DateTime now = rtc.now();
 
-  uint32_t sendTime = now.hour() * 3600 + now.minute() * 60 + now.second();
+  sendTime = now.hour() * 3600 + now.minute() * 60 + now.second();
 
   if (currentMillis - previousMillis >= interval) {
 
     previousMillis = currentMillis;
 
-    binLevel = mapFloat(readUltrasonic(), 0, 110.0, 100.0, 0);
+    binLevel = mapFloat(readUltrasonic(), 0, 72.0, 100.0, 0);
 
-    String additionalInfo = "SL2," + String(binLevel) + "," + String(sendTime); // node1 - SL1
+    String additionalInfo = "SL2," + String(binLevel) + "," + String(sendTime);  // node1 - SL1
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
     Serial.println(Message);
@@ -107,7 +112,7 @@ void loop() {
     packetCounter++;
     sentCounter++;
 
-    if (packetCounter >= 30) {
+    if (packetCounter >= 10) {
       packetCounter = 0;
       currentConfigIndex++;
 
@@ -124,21 +129,19 @@ void loop() {
 double readUltrasonic() {
   long duration, inches, cm;
 
-  pinMode(pingPin, OUTPUT);
-  digitalWrite(pingPin, LOW);
+  digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
-  digitalWrite(pingPin, HIGH);
+  digitalWrite(trigPin, HIGH);
   delayMicroseconds(5);
-  digitalWrite(pingPin, LOW);
+  digitalWrite(trigPin, LOW);
 
-  pinMode(pingPin, INPUT);
   duration = pulseIn(pingPin, HIGH);
 
   cm = microsecondsToCentimeters(duration);
   Serial.println(cm);
   if (cm >= 1200) cm = 0;
 
-  return cm > 110.0 ? 110.0 : cm; // to change based on actual cm of bin
+  return cm > 72.0 ? 72.0 : cm;  // to change based on actual cm of bin
 }
 
 long microsecondsToCentimeters(long microseconds) {
