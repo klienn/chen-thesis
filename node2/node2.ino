@@ -81,7 +81,6 @@ void setup() {
     Serial.flush();
     while (1) delay(10);
   }
-  // rtc.adjust(DateTime(F(_DATE_), F(_TIME_)));
 
   LoRa.setPins(ss, rst, dio0);
 
