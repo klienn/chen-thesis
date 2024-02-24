@@ -238,7 +238,6 @@ void setup() {
     Serial.flush();
     while (1) delay(10);
   }
-  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
   WiFi.setAutoReconnect(true);
 
