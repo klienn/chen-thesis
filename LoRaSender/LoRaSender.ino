@@ -33,6 +33,8 @@ RTC_DS3231 rtc;
 
 byte node = 0;
 
+uint32_t unixTime = 0;
+
 bool isDigitMinusOrDot(char c) {
   return isdigit(c) || c == '-' || c == '.';
 }
@@ -148,31 +150,9 @@ void onReceive(int packetSize) {
   Serial.println("Snr: " + String(LoRa.packetSnr()));
 
   processIncomingMessage(sender, Incoming);
-
-  // String nodeIdentifier = Incoming.substring(0, Incoming.indexOf(','));
-
-  // // Increment the received packet counter for the appropriate node
-  // if (nodeIdentifier == "SL1") {
-  //   packetsReceivedFromNode1++;
-  // } else if (nodeIdentifier == "SL2") {
-  //   packetsReceivedFromNode2++;
-  // }
-
-  // unsigned long receiveTime = millis();
-  // unsigned long sendTime = Incoming.substring(2, Incoming.indexOf(',')).toInt();
-  // unsigned long timeOfArrival = receiveTime - sendTime;
-
-  // Serial.print("Time of Arrival: ");
-  // Serial.println(timeOfArrival);
-  // //----------------------------------------
 }
 
 void processIncomingMessage(byte sender, String message) {
-
-  DateTime now = rtc.now();
-
-  uint32_t unixtime = now.hour() * 3600 + now.minute() * 60 + now.second();
-
   int firstCommaIndex = message.indexOf(',');
   String nodeIdentifier = message.substring(0, firstCommaIndex);
 
@@ -196,7 +176,11 @@ void processIncomingMessage(byte sender, String message) {
   String config = message.substring(fourthCommaIndex + 1);
 
   // Calculate ToA
-  unsigned long timeOfArrival = unixtime - sendTime;
+  unsigned long timeOfArrival = unixTime - sendTime;
+
+  Serial.println("Current unixTime gateway: " + String(unixTime));
+  Serial.println("Current unixTime node: " + String(sendTime));
+  Serial.println("Calculated ToA: " + String(timeOfArrival));
 
   // Print information (for debugging, can be removed later)
   Serial.println("Received message from node: " + String(sender == 0x02 ? "1" : "2"));
@@ -254,7 +238,7 @@ void setup() {
     Serial.flush();
     while (1) delay(10);
   }
-  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
   WiFi.setAutoReconnect(true);
 
@@ -297,5 +281,9 @@ void setup() {
 }
 
 void loop() {
+
+  DateTime now = rtc.now();
+  unixTime = now.hour() * 3600 + now.minute() * 60 + now.second();
+
   onReceive(LoRa.parsePacket());
 }

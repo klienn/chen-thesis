@@ -11,7 +11,7 @@
 String Incoming = "";
 String Message = "";
 
-byte LocalAddress = 0x03;        
+byte LocalAddress = 0x03; // node1 - 0x02 node2 - 0x03 node3 - 0x4 node4 - 0x05
 byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 
 RTC_DS3231 rtc;
@@ -19,7 +19,8 @@ RTC_DS3231 rtc;
 float binLevel = 0;
 
 unsigned long previousMillis = 0;
-const long interval = 5000;
+const long interval = 5000;  //5 secs
+// const long interval = 3000;
 
 int packetCounter = 0;
 int sentCounter = 0;
@@ -75,7 +76,7 @@ void setup() {
     Serial.flush();
     while (1) delay(10);
   }
-  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // rtc.adjust(DateTime(F(_DATE_), F(_TIME_)));
 
   LoRa.setPins(ss, rst, dio0);
 
@@ -92,11 +93,12 @@ void loop() {
   uint32_t sendTime = now.hour() * 3600 + now.minute() * 60 + now.second();
 
   if (currentMillis - previousMillis >= interval) {
+
     previousMillis = currentMillis;
 
-    binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
+    binLevel = mapFloat(readUltrasonic(), 0, 110.0, 100.0, 0);
 
-    String additionalInfo = "SL2," + String(binLevel) + "," + String(sendTime);
+    String additionalInfo = "SL2," + String(binLevel) + "," + String(sendTime); // node1 - SL1
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
     Serial.println(Message);
@@ -133,9 +135,10 @@ double readUltrasonic() {
   duration = pulseIn(pingPin, HIGH);
 
   cm = microsecondsToCentimeters(duration);
+  Serial.println(cm);
   if (cm >= 1200) cm = 0;
 
-  return cm > 84.0 ? 84.0 : cm;
+  return cm > 110.0 ? 110.0 : cm; // to change based on actual cm of bin
 }
 
 long microsecondsToCentimeters(long microseconds) {
