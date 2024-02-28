@@ -14,7 +14,7 @@ std::queue<String> httpQueue;
 
 const char* ssid = "scam ni";
 const char* password = "Walakokabalo0123!";
-const char* webAppUrl = "https://script.google.com/macros/s/AKfycbyHnenfG2XHthIcA08X5MD8TXiF1ikFGyslCP_g510UhO2tWFdExeLSA_jp6FFWiDMSGQ/exec";  // The URL you got from the script deployment
+const char* webAppUrl = "https://script.google.com/macros/s/AKfycbwoA9v7wDIe3vG8_5tBZboHTkLZJcKvp9nUz-hyNIqEBFJVDwBj237pgaQ6GyXETZVu/exec";  // The URL you got from the script deployment
 WiFiClient client;
 
 String Incoming = "";
@@ -26,15 +26,18 @@ byte Destination_ESP32_Node_2 = 0x03;
 byte Destination_ESP32_Node_3 = 0x04;
 byte Destination_ESP32_Node_4 = 0x05;
 
-unsigned long previousMillis = 0;
+unsigned long previousRTCMillis = 0;
 const long interval = 1000;
+
+int currentSecond = 0;
+int previousSecond = 0;
 
 RTC_DS3231 rtc;
 
 byte node = 0;
 
 uint32_t unixTime = 0;
-
+int currentMillis = 0;
 bool isDigitMinusOrDot(char c) {
   return isdigit(c) || c == '-' || c == '.';
 }
@@ -176,7 +179,7 @@ void processIncomingMessage(byte sender, String message) {
   String config = message.substring(fourthCommaIndex + 1);
 
   // Calculate ToA
-  unsigned long timeOfArrival = unixTime - sendTime;
+  unsigned long timeOfArrival = (unixTime - sendTime) - 1900;
 
   Serial.println("Current unixTime gateway: " + String(unixTime));
   Serial.println("Current unixTime node: " + String(sendTime));
@@ -280,9 +283,16 @@ void setup() {
 }
 
 void loop() {
-
+  unsigned long currentMillis = millis();
   DateTime now = rtc.now();
-  unixTime = now.hour() * 3600 + now.minute() * 60 + now.second();
 
+  currentSecond = now.second();
+
+  if (currentSecond != previousSecond) {
+    previousSecond = currentSecond;
+    previousRTCMillis = currentMillis;
+  }
+
+  unixTime = (now.hour() * 3600 + now.minute() * 60 + now.second()) * 1000 + (currentMillis - previousRTCMillis);
   onReceive(LoRa.parsePacket());
 }

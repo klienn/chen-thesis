@@ -20,6 +20,7 @@ RTC_DS3231 rtc;
 float binLevel = 0;
 
 unsigned long previousMillis = 0;
+unsigned long previousRTCMillis = 0;
 const long interval = 5000;  //5 secs
 // const long interval = 3000;
 
@@ -29,6 +30,9 @@ int ackCounter = 0;
 char currentGroup = 'A';
 int currentConfigIndex = 0;
 uint32_t sendTime = 0;
+
+int currentSecond = 0;
+int previousSecond = 0;
 
 void sendMessage(String Outgoing, byte Destination) {
 
@@ -91,10 +95,16 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
-
   DateTime now = rtc.now();
 
-  sendTime = now.hour() * 3600 + now.minute() * 60 + now.second();
+  currentSecond = now.second();
+
+  if (currentSecond != previousSecond) {
+    previousSecond = currentSecond;
+    previousRTCMillis = currentMillis;
+  }
+
+  sendTime = (now.hour() * 3600 + now.minute() * 60 + now.second()) * 1000 + (currentMillis - previousRTCMillis);
 
   if (currentMillis - previousMillis >= interval) {
 
@@ -137,7 +147,6 @@ double readUltrasonic() {
   duration = pulseIn(pingPin, HIGH);
 
   cm = microsecondsToCentimeters(duration);
-  Serial.println(cm);
   if (cm >= 1200) cm = 0;
 
   return cm > 72.0 ? 72.0 : cm;  // to change based on actual cm of bin

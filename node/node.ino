@@ -4,6 +4,7 @@
 #include "enums.h"
 
 #define pingPin (16)
+#define trigPin (17)
 #define ss 5
 #define rst 4
 #define dio0 2
@@ -11,7 +12,7 @@
 String Incoming = "";
 String Message = "";
 
-byte LocalAddress = 0x02;        //--> address of this device (Slave 1).
+byte LocalAddress = 0x02;        // node1 - 0x02 node2 - 0x03 node3 - 0x4 node4 - 0x05
 byte Destination_Master = 0x01;  //--> destination to send to Master (ESP32).
 
 RTC_DS3231 rtc;
@@ -19,13 +20,19 @@ RTC_DS3231 rtc;
 float binLevel = 0;
 
 unsigned long previousMillis = 0;
-const long interval = 5000;
+unsigned long previousRTCMillis = 0;
+const long interval = 5000;  //5 secs
+// const long interval = 3000;
 
 int packetCounter = 0;
 int sentCounter = 0;
 int ackCounter = 0;
 char currentGroup = 'A';
 int currentConfigIndex = 0;
+uint32_t sendTime = 0;
+
+int currentSecond = 0;
+int previousSecond = 0;
 
 void sendMessage(String Outgoing, byte Destination) {
 
@@ -70,12 +77,14 @@ char getNextGroup(char currentGroup) {
 void setup() {
   Serial.begin(115200);
 
+  pinMode(pingPin, INPUT);
+  pinMode(trigPin, OUTPUT);
+
   if (!rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
     while (1) delay(10);
   }
-  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
   LoRa.setPins(ss, rst, dio0);
 
@@ -86,17 +95,24 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
-
   DateTime now = rtc.now();
 
-  uint32_t sendTime = now.hour() * 3600 + now.minute() * 60 + now.second();
+  currentSecond = now.second();
+
+  if (currentSecond != previousSecond) {
+    previousSecond = currentSecond;
+    previousRTCMillis = currentMillis;
+  }
+
+  sendTime = (now.hour() * 3600 + now.minute() * 60 + now.second()) * 1000 + (currentMillis - previousRTCMillis);
 
   if (currentMillis - previousMillis >= interval) {
+
     previousMillis = currentMillis;
 
-    binLevel = mapFloat(readUltrasonic(), 0, 84.0, 100.0, 0);
+    binLevel = mapFloat(readUltrasonic(), 0, 72.0, 100.0, 0);
 
-    String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);
+    String additionalInfo = "SL1," + String(binLevel) + "," + String(sendTime);  // node1 - SL1
 
     Message = additionalInfo + "," + String(packetCounter) + "," + currentGroup + String(currentConfigIndex);
     Serial.println(Message);
@@ -105,7 +121,7 @@ void loop() {
     packetCounter++;
     sentCounter++;
 
-    if (packetCounter >= 30) {
+    if (packetCounter >= 10) {
       packetCounter = 0;
       currentConfigIndex++;
 
@@ -122,20 +138,18 @@ void loop() {
 double readUltrasonic() {
   long duration, inches, cm;
 
-  pinMode(pingPin, OUTPUT);
-  digitalWrite(pingPin, LOW);
+  digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
-  digitalWrite(pingPin, HIGH);
+  digitalWrite(trigPin, HIGH);
   delayMicroseconds(5);
-  digitalWrite(pingPin, LOW);
+  digitalWrite(trigPin, LOW);
 
-  pinMode(pingPin, INPUT);
   duration = pulseIn(pingPin, HIGH);
 
   cm = microsecondsToCentimeters(duration);
   if (cm >= 1200) cm = 0;
 
-  return cm > 84.0 ? 84.0 : cm;
+  return cm > 72.0 ? 72.0 : cm;  // to change based on actual cm of bin
 }
 
 long microsecondsToCentimeters(long microseconds) {
