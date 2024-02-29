@@ -179,7 +179,7 @@ void processIncomingMessage(byte sender, String message) {
   String config = message.substring(fourthCommaIndex + 1);
 
   // Calculate ToA
-  unsigned long timeOfArrival = (unixTime - sendTime) - 1900;
+  unsigned long timeOfArrival = (unixTime - sendTime) - 1720; // change this 1720 to adjust the offset
 
   Serial.println("Current unixTime gateway: " + String(unixTime));
   Serial.println("Current unixTime node: " + String(sendTime));
