@@ -183,6 +183,7 @@ void processIncomingMessage(byte sender, String message) {
 
   Serial.println("Current unixTime gateway: " + String(unixTime));
   Serial.println("Current unixTime node: " + String(sendTime));
+  Serial.println("Offet: " + String(unixTime - sendTime));
   Serial.println("Calculated ToA: " + String(timeOfArrival));
 
   // Print information (for debugging, can be removed later)
