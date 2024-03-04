@@ -1,4 +1,6 @@
 #include <SPI.h>
+#include <SD.h>
+#include "FS.h"
 #include <LoRa.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -31,6 +33,9 @@ const long interval = 1000;
 
 int currentSecond = 0;
 int previousSecond = 0;
+
+File myFile;
+const int CS = 15;
 
 RTC_DS3231 rtc;
 
@@ -179,7 +184,7 @@ void processIncomingMessage(byte sender, String message) {
   String config = message.substring(fourthCommaIndex + 1);
 
   // Calculate ToA
-  unsigned long timeOfArrival = (unixTime - sendTime) - 1720; // change this 1720 to adjust the offset
+  unsigned long timeOfArrival = (unixTime - sendTime) - 1720;  // change this 1720 to adjust the offset
 
   Serial.println("Current unixTime gateway: " + String(unixTime));
   Serial.println("Current unixTime node: " + String(sendTime));
@@ -194,9 +199,11 @@ void processIncomingMessage(byte sender, String message) {
   Serial.println("Config: " + config);
   Serial.println("HERE");
   String jsonData = "{\"node\":\"" + String(nodeIdentifier) + "\",\"binLevel\":" + String(binLevel) + ",\"toa\":" + String(timeOfArrival) + ",\"packet\":" + String(packetNumber) + ",\"config\":\"" + config + "\",\"rssi\":" + String(LoRa.packetRssi()) + ",\"snr\":" + String(LoRa.packetSnr()) + "}";
+  String csvData = checktimertc() + "," + String(nodeIdentifier) + "," + String(binLevel) + "," + String(timeOfArrival) + "," + String(packetNumber) + "," + config + "," + String(LoRa.packetRssi()) + "," + String(LoRa.packetSnr()) + "\n";
   if (isValidData(jsonData)) {
     Serial.println("Adding to queue: " + jsonData);
     httpQueue.push(jsonData);
+    appendFile(SD, "/data.csv", csvData);
     Serial.println("Queued data for HTTP POST: " + jsonData);
   } else {
     Serial.println("Invalid data detected, not queuing: " + jsonData);
@@ -242,6 +249,31 @@ void setup() {
     Serial.flush();
     while (1) delay(10);
   }
+
+  if (!SD.begin(CS)) {
+    Serial.println("Card Mount Failed");
+    return;
+  }
+  uint8_t cardType = SD.cardType();
+
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  }
+
+  Serial.print("SD Card Type: ");
+  if (cardType == CARD_MMC) {
+    Serial.println("MMC");
+  } else if (cardType == CARD_SD) {
+    Serial.println("SDSC");
+  } else if (cardType == CARD_SDHC) {
+    Serial.println("SDHC");
+  } else {
+    Serial.println("UNKNOWN");
+  }
+
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+  Serial.printf("SD Card Size: %lluMB\n", cardSize);
 
   WiFi.setAutoReconnect(true);
 
@@ -296,4 +328,42 @@ void loop() {
 
   unixTime = (now.hour() * 3600 + now.minute() * 60 + now.second()) * 1000 + (currentMillis - previousRTCMillis);
   onReceive(LoRa.parsePacket());
+}
+
+String checktimertc() {
+  String currentDate = "";
+  DateTime now = rtc.now();
+  currentDate += now.day();
+  currentDate += "/";
+  currentDate += now.month();
+  currentDate += "/";
+  currentDate += now.year();
+  currentDate += " ";
+  currentDate += now.hour();
+  currentDate += ":";
+  currentDate += now.minute();
+  return currentDate;
+}
+
+void appendFile(fs::FS& fs, const char* path, String message) {
+  Serial.printf("Appending to file: %s\n", path);
+
+  File file = fs.open(path, FILE_APPEND);
+  if (!file) {
+    Serial.println("Failed to open file for appending");
+    return;
+  }
+  Serial.println(file.size());
+
+  if (file.size() <= 0 || file.size() == 4294967295) {
+    file.println("Date, Node, binLevel, toa, packet, config, rssi, snr ");
+    Serial.println("Added header");
+  }
+  if (file.print(message)) {
+    Serial.println("Message appended");
+  } else {
+    Serial.println("Append failed");
+  }
+
+  file.close();
 }
